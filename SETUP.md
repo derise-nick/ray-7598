@@ -1,3 +1,5 @@
+Here are the steps to set this up locally. Lines that start with `$` are run in the WSL terminal, `>` means Windows terminal
+
 # Clone the github fork
 ### Set up an SSH key: https://www.thatamazingprogrammer.com/setting-up-ssh-keys-for-github-using-wsl-and-keychain
 ### Make a directory to put the repo in:
