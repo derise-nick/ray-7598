@@ -738,6 +738,8 @@ class GlobalState:
             if node["Alive"]:
                 for key, value in node["Resources"].items():
                     resources[key] += value
+        if(not resources["CPU"]):
+            resources["CPU"] = 0
         return dict(resources)
 
     def _live_node_ids(self):
