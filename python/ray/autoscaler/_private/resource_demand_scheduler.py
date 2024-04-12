@@ -17,6 +17,7 @@ from typing import Callable, Dict, List, Optional, Tuple
 
 import ray
 from ray._private.gcs_utils import PlacementGroupTableData
+from ray.autoscaler._private.event_summarizer import EventSummarizer
 from ray.autoscaler._private.constants import (
     AUTOSCALER_CONSERVE_GPU_NODES,
     AUTOSCALER_UTILIZATION_SCORER_KEY,
@@ -106,7 +107,7 @@ class ResourceDemandScheduler:
         node_types: Dict[NodeType, NodeTypeConfigDict],
         max_workers: int,
         head_node_type: NodeType,
-        upscaling_speed: float,
+        upscaling_speed: float
     ) -> None:
         self.provider = provider
         self.node_types = copy.deepcopy(node_types)
@@ -158,12 +159,17 @@ class ResourceDemandScheduler:
         self.upscaling_speed = upscaling_speed
 
     def is_feasible(self, bundle: ResourceDict) -> bool:
+        loggy = logging.getLogger(__name__)
         for node_type, config in self.node_types.items():
             max_of_type = config.get("max_workers", 0)
             node_resources = config["resources"]
+            # for k, v in bundle.items():
+            #     loggy.info("k = " + k)
+            #     loggy.info("v = " + v)
+            #     loggy.info("IMPLICIT_RESOURCE_PREFIX: " + ray._raylet.IMPLICIT_RESOURCE_PREFIX)
             if (node_type == self.head_node_type or max_of_type > 0) and _fits(
                 node_resources, bundle
-            ):
+            ) and _mem_fits(node_resources, bundle):
                 return True
         return False
 
@@ -935,12 +941,25 @@ def _fits(node: ResourceDict, resources: ResourceDict) -> bool:
     for k, v in resources.items():
         # TODO(jjyao): Change ResourceDict to a class so we can
         # hide the implicit resource handling.
+        # logger.info("key: {}", k)
+        # logger.info("value: {}", v)
+        # logger.info("IMPLICIT_RESOURCE_PREFIX: {}", ray._raylet.IMPLICIT_RESOURCE_PREFIX)
         if v > node.get(
             k, 1.0 if k.startswith(ray._raylet.IMPLICIT_RESOURCE_PREFIX) else 0.0
         ):
             return False
     return True
 
+def _mem_fits(node: ResourceDict, resources: ResourceDict) -> bool:
+    membuffer = 500 * 1024 * 1024 # 500 MB Static Buffer as POC
+    for k, v in resources.items():
+        if k == "memory":
+            logger.info("Entering custom memory fit!")
+            logger.info("Memory requested: %s", v)
+            logger.info("Memory available: %s", node.get(k,1))
+            if v > (node.get(k,1) - membuffer):
+                return False
+    return True
 
 def _inplace_subtract(node: ResourceDict, resources: ResourceDict) -> None:
     for k, v in resources.items():
