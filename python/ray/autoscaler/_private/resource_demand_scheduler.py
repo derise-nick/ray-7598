@@ -159,17 +159,11 @@ class ResourceDemandScheduler:
         self.upscaling_speed = upscaling_speed
 
     def is_feasible(self, bundle: ResourceDict) -> bool:
-        loggy = logging.getLogger(__name__)
         for node_type, config in self.node_types.items():
             max_of_type = config.get("max_workers", 0)
             node_resources = config["resources"]
-            # for k, v in bundle.items():
-            #     loggy.info("k = " + k)
-            #     loggy.info("v = " + v)
-            #     loggy.info("IMPLICIT_RESOURCE_PREFIX: " + ray._raylet.IMPLICIT_RESOURCE_PREFIX)
             if (node_type == self.head_node_type or max_of_type > 0) and _fits(
-                node_resources, bundle
-            ) and _mem_fits(node_resources, bundle):
+                node_resources, bundle):
                 return True
         return False
 
@@ -939,26 +933,20 @@ def get_bin_pack_residual(
 
 def _fits(node: ResourceDict, resources: ResourceDict) -> bool:
     for k, v in resources.items():
-        # TODO(jjyao): Change ResourceDict to a class so we can
-        # hide the implicit resource handling.
-        # logger.info("key: {}", k)
-        # logger.info("value: {}", v)
-        # logger.info("IMPLICIT_RESOURCE_PREFIX: {}", ray._raylet.IMPLICIT_RESOURCE_PREFIX)
-        if v > node.get(
-            k, 1.0 if k.startswith(ray._raylet.IMPLICIT_RESOURCE_PREFIX) else 0.0
-        ):
-            return False
-    return True
-
-def _mem_fits(node: ResourceDict, resources: ResourceDict) -> bool:
-    membuffer = 500 * 1024 * 1024 # 500 MB Static Buffer as POC
-    for k, v in resources.items():
         if k == "memory":
+            membuffer = 500 * 1024 * 1024 # 500 MB Static Buffer
             logger.info("Entering custom memory fit!")
             logger.info("Memory requested: %s", v)
             logger.info("Memory available: %s", node.get(k,1))
-            if v > (node.get(k,1) - membuffer):
+            logger.info('Entering _fits, memory minus buffer: %s', node.get('memory') - membuffer)
+            if v > (node.get(
+                k, 1.0 if k.startswith(ray._raylet.IMPLICIT_RESOURCE_PREFIX) else 0.0
+            ) - membuffer):
                 return False
+        elif v > node.get(
+            k, 1.0 if k.startswith(ray._raylet.IMPLICIT_RESOURCE_PREFIX) else 0.0
+        ):
+            return False
     return True
 
 def _inplace_subtract(node: ResourceDict, resources: ResourceDict) -> None:
